@@ -1,0 +1,12 @@
+# 개발 환경 - 짧은 TTL (빠른 테스트를 위해)
+cache:
+  ttl:
+    users: PT2M        # 2분
+    posts: PT10M       # 10분
+    popular-posts: PT30S # 30초
+    statistics: PT5M   # 5분
+    settings: PT1H     # 1시간
+
+# 프로덕션 기본값
+spring:
+  profiles: dev

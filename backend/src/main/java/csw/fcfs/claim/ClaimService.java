@@ -3,7 +3,6 @@ package csw.fcfs.claim;
 import java.security.Principal;
 import java.util.Collections;
 
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -24,11 +23,12 @@ public class ClaimService {
     private final UserAccountRepository userAccountRepository;
     private final ClaimRepository claimRepository;
     private final EmailService emailService;
+    private final ClaimCacheService claimCacheService;
 
     public String claimPost(Long postId, Principal principal) {
         // Redis 캐싱으로 DB 조회 최소화
-        Post post = getPostFromCache(postId);
-        UserAccount user = getUserFromCache(principal.getName());
+        Post post = claimCacheService.getPostFromCache(postId);
+        UserAccount user = claimCacheService.getUserFromCache(principal.getName());
 
         // 게시물 소유자가 클레임을 시도하는 경우 차단
         if (post.getOwner().getId().equals(user.getId())) {
@@ -49,18 +49,6 @@ public class ClaimService {
         return result;
     }
 
-    @Cacheable(value = "posts", key = "#postId")
-    public Post getPostFromCache(Long postId) {  // private -> public으로 변경
-        return postRepository.findById(postId)
-                .orElseThrow(() -> new IllegalArgumentException("Post not found"));
-    }
-
-    @Cacheable(value = "users", key = "#email")
-    public UserAccount getUserFromCache(String email) {  // private -> public으로 변경
-        return userAccountRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-    }
-
     @Async("claimExecutor")  // 전용 스레드 풀 사용
     public void saveClaimAndNotify(Post post, UserAccount user) {
         Claim claim = Claim.builder()
@@ -75,7 +63,8 @@ public class ClaimService {
     }
 
     public String declaimPost(Long postId, Principal principal) {
-        Post post = postRepository.findById(postId)
+        // N+1 문제 해결: owner와 함께 조회
+        Post post = postRepository.findByIdWithOwner(postId)
                 .orElseThrow(() -> new IllegalArgumentException("Post not found"));
         UserAccount user = userAccountRepository.findByEmail(principal.getName())
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
@@ -94,11 +83,13 @@ public class ClaimService {
 
     @Async
     public void deleteClaim(Post post, UserAccount user) {
-        claimRepository.findByPostAndUser(post, user).ifPresent(claimRepository::delete);
+        claimRepository.findByPostAndUserWithDetails(post, user)  // N+1 문제 해결
+                .ifPresent(claimRepository::delete);
     }
 
     public void removeClaim(Long postId, Long userId) {
-        Post post = postRepository.findById(postId)
+        // N+1 문제 해결: owner와 함께 조회
+        Post post = postRepository.findByIdWithOwner(postId)
                 .orElseThrow(() -> new IllegalArgumentException("Post not found"));
         UserAccount user = userAccountRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));

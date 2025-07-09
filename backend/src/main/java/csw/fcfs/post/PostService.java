@@ -7,6 +7,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -97,19 +99,24 @@ public class PostService {
     }
 
     public PostDto getPost(Long id) {
-        Post post = postRepository.findById(id)
+        Post post = postRepository.findByIdWithOwner(id)  // N+1 문제 해결
                 .orElseThrow(() -> new IllegalArgumentException("Post not found"));
         return toDto(post);
     }
 
     public List<PostDto> getAllPosts() {
-        return postRepository.findAll().stream()
+        return postRepository.findAllWithOwner().stream()  // N+1 문제 해결
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
 
+    public Page<PostDto> getAllPosts(Pageable pageable) {
+        Page<Post> posts = postRepository.findAllWithOwner(pageable);  // N+1 문제 해결
+        return posts.map(this::toDto);
+    }
+
     public List<PostAdminDto> getAllPostsForAdmin() {
-        return postRepository.findAll().stream()
+        return postRepository.findAllWithOwnerAndClaims().stream()  // N+1 문제 해결
                 .map(this::toAdminDto)
                 .collect(Collectors.toList());
     }
@@ -128,7 +135,9 @@ public class PostService {
                 post.getCloseAt(),
                 post.getTags() != null ? Arrays.asList(post.getTags()) : List.of(),
                 post.getImages() != null ? Arrays.asList(post.getImages()) : List.of(),
-                currentClaims
+                currentClaims,
+                post.getOwner().getEmail(),  // 작성자 이메일 추가
+                post.getOwner().getId()      // 작성자 ID 추가
         );
     }
 
