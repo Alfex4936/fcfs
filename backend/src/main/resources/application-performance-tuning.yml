@@ -1,0 +1,44 @@
+# Tomcat 최적화 설정
+server:
+  tomcat:
+    threads:
+      max: 400              # 최대 스레드 수 증가 (기본: 200)
+      min-spare: 100        # 최소 유휴 스레드 (기본: 10)
+    connection-timeout: 5000 # 연결 타임아웃 (기본: 60000)
+    accept-count: 200       # 백로그 큐 크기 (기본: 100)
+    max-connections: 2000   # 최대 연결 수 (기본: 8192)
+    keep-alive-timeout: 30000 # Keep-Alive 타임아웃
+    max-keep-alive-requests: 200 # Keep-Alive 최대 요청 수
+
+# HikariCP 최적화 설정 (기존 파일 확장)
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 100       # 대폭 증가 (기존: 50)
+      minimum-idle: 50             # 증가 (기존: 20)
+      connection-timeout: 2000     # 단축 (기존: 3000)
+      idle-timeout: 180000         # 3분으로 단축
+      max-lifetime: 600000         # 10분으로 단축
+      leak-detection-threshold: 30000  # 30초로 단축
+      auto-commit: false           # 트랜잭션 제어 최적화
+      read-only: false
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+
+# JPA 최적화
+  jpa:
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50     # 배치 크기
+          fetch_size: 100    # 페치 크기
+        order_inserts: true  # 삽입 순서 최적화
+        order_updates: true  # 업데이트 순서 최적화
+        batch_versioned_data: true # 버전 데이터 배치 처리
+        connection:
+          provider_disables_autocommit: true  # 오토커밋 비활성화
+        cache:
+          use_second_level_cache: false       # 2차 캐시 비활성화 (Redis 사용)
+          use_query_cache: false              # 쿼리 캐시 비활성화
+        generate_statistics: false            # 통계 생성 비활성화
+        format_sql: false                     # SQL 포맷팅 비활성화
+    show-sql: false         # 성능 테스트 시 SQL 로깅 비활성화

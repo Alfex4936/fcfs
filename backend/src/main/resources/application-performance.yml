@@ -1,0 +1,11 @@
+# HikariCP 최적화 설정
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 50        # 증가 (기본: 10)
+      minimum-idle: 20             # 증가 (기본: 10)
+      connection-timeout: 3000     # 3초
+      idle-timeout: 300000         # 5분
+      max-lifetime: 900000         # 15분
+      leak-detection-threshold: 60000  # 연결 누수 감지
+
