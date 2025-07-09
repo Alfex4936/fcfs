@@ -11,13 +11,25 @@ export function cn(...inputs) {
  * Format date to human readable string
  */
 export function formatDate(date) {
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(date));
+  if (!date) return 'Invalid date';
+  
+  try {
+    const dateObj = new Date(date);
+    if (isNaN(dateObj.getTime())) {
+      return 'Invalid date';
+    }
+    
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(dateObj);
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid date';
+  }
 }
 
 /**
@@ -169,4 +181,52 @@ export function formatFileSize(bytes) {
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+/**
+ * Generate placeholder image URL
+ */
+export function getPlaceholderImage(width = 300, height = 200, text = 'No Image') {
+  // Using a placeholder service like placeholder.com or picsum.photos
+  return `https://via.placeholder.com/${width}x${height}/f3f4f6/9ca3af?text=${encodeURIComponent(text)}`;
+}
+
+/**
+ * Generate avatar placeholder
+ */
+export function getAvatarPlaceholder(name, size = 40) {
+  const initials = name
+    ? name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : '??';
+  
+  // Generate a consistent color based on the name
+  const colors = [
+    '#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b',
+    '#fa709a', '#fee140', '#a8edea', '#ff9a9e', '#c471f5'
+  ];
+  
+  const colorIndex = name 
+    ? name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length
+    : 0;
+  
+  const bgColor = colors[colorIndex].replace('#', '');
+  
+  return `https://via.placeholder.com/${size}x${size}/${bgColor}/ffffff?text=${initials}`;
+}
+
+/**
+ * Get optimized image URL with fallback
+ */
+export function getOptimizedImageUrl(originalUrl, width = 300, height = 200, fallbackText = 'Image') {
+  if (!originalUrl) {
+    return getPlaceholderImage(width, height, fallbackText);
+  }
+  
+  // If it's already a placeholder or external URL, return as is
+  if (originalUrl.includes('placeholder.com') || originalUrl.includes('via.placeholder') || originalUrl.startsWith('http')) {
+    return originalUrl;
+  }
+  
+  // For local API images, return the original URL
+  return originalUrl;
 }

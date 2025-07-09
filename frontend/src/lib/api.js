@@ -48,7 +48,7 @@ export const authAPI = {
 
 // Posts API
 export const postsAPI = {
-  getAll: () => api.get('/posts'),
+  getAll: (params = {}) => api.get('/posts', params),
   getById: (id) => api.get(`/posts/${id}`),
   create: (formData) => api.post('/posts', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }

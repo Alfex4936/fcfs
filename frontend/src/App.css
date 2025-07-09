@@ -386,12 +386,16 @@
 .badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.025em;
+  text-align: center;
+  line-height: 1;
+  min-height: 20px;
 }
 
 .badge-primary {
@@ -417,6 +421,32 @@
 .badge-gray {
   background: var(--gray-100);
   color: var(--gray-700);
+}
+
+/* Badge text centering improvements */
+.badge span,
+.badge div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Ensure numbers and text are perfectly centered */
+.badge {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Fix for quota badges specifically */
+.badge-quota {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Remove text transform for number badges */
+.badge-gray.text-xs {
+  text-transform: none;
 }
 
 /* Avatar Component */
@@ -599,22 +629,379 @@
   transform: scale(1.1);
 }
 
-/* Responsive design */
+/* Utility classes for PostList */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Grid layout utilities */
+.grid {
+  display: grid;
+}
+
+.grid-cols-1 {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Spacing utilities */
+.space-y-lg > * + * {
+  margin-top: var(--spacing-lg);
+}
+
+.space-x-sm > * + * {
+  margin-left: var(--spacing-sm);
+}
+
+.space-x-1 > * + * {
+  margin-left: 0.25rem;
+}
+
+.gap-lg {
+  gap: var(--spacing-lg);
+}
+
+/* Flexbox utilities */
+.flex {
+  display: flex;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+/* Text utilities */
+.text-center {
+  text-align: center;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+}
+
+.text-lg {
+  font-size: 1.125rem;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Width utilities */
+.w-full {
+  width: 100%;
+}
+
+.w-4 {
+  width: 1rem;
+}
+
+.w-12 {
+  width: 3rem;
+}
+
+.w-16 {
+  width: 4rem;
+}
+
+/* Height utilities */
+.h-4 {
+  height: 1rem;
+}
+
+.h-16 {
+  height: 4rem;
+}
+
+.h-48 {
+  height: 12rem;
+}
+
+.h-full {
+  height: 100%;
+}
+
+/* Margin utilities */
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mr-1 {
+  margin-right: 0.25rem;
+}
+
+.mr-sm {
+  margin-right: var(--spacing-sm);
+}
+
+.ml-md {
+  margin-left: var(--spacing-md);
+}
+
+.mb-sm {
+  margin-bottom: var(--spacing-sm);
+}
+
+.mb-md {
+  margin-bottom: var(--spacing-md);
+}
+
+.mb-lg {
+  margin-bottom: var(--spacing-lg);
+}
+
+.mt-xl {
+  margin-top: var(--spacing-xl);
+}
+
+/* Padding utilities */
+.py-xl {
+  padding-top: var(--spacing-xl);
+  padding-bottom: var(--spacing-xl);
+}
+
+/* Position utilities */
+.relative {
+  position: relative;
+}
+
+.absolute {
+  position: absolute;
+}
+
+.top-sm {
+  top: var(--spacing-sm);
+}
+
+.right-sm {
+  right: var(--spacing-sm);
+}
+
+.left-sm {
+  left: var(--spacing-sm);
+}
+
+/* Object utilities */
+.object-cover {
+  object-fit: cover;
+}
+
+/* Background utilities */
+.bg-gray-100 {
+  background-color: var(--gray-100);
+}
+
+/* Text color utilities */
+.text-gray-500 {
+  color: var(--gray-500);
+}
+
+.text-gray-600 {
+  color: var(--gray-600);
+}
+
+.text-gray-900 {
+  color: var(--gray-900);
+}
+
+.text-green-600 {
+  color: #16a34a;
+}
+
+/* Opacity utilities */
+.opacity-50 {
+  opacity: 0.5;
+}
+
+/* Overflow utilities */
+.overflow-hidden {
+  overflow: hidden;
+}
+
+/* Transition utilities */
+.transition-transform {
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.duration-300 {
+  transition-duration: 300ms;
+}
+
+.hover\:scale-105:hover {
+  transform: scale(1.05);
+}
+
+/* Min-width utilities */
+.min-w-\[40px\] {
+  min-width: 40px;
+}
+
+/* Animation classes */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive utilities */
+@media (min-width: 768px) {
+  .md\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .lg\:grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Post card specific improvements */
+.card:hover .card-image {
+  transform: scale(1.02);
+}
+
+.card-image {
+  transition: transform 0.3s ease;
+}
+
+/* Enhanced glassmorphism effect */
+.card-glass {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.card-glass:hover {
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* Additional utility classes for PostList enhancements */
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.gap-1 {
+  gap: 0.25rem;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.max-w-\[60\%\] {
+  max-width: 60%;
+}
+
+.space-y-1 > * + * {
+  margin-top: 0.25rem;
+}
+
+.w-12 {
+  width: 3rem;
+}
+
+/* Badge improvements for tags */
+.badge.text-xs {
+  font-size: 0.625rem;
+  padding: 0.125rem 0.375rem;
+  min-height: 18px;
+  line-height: 1;
+}
+
+/* Enhanced hover effects for post cards */
+.card:hover .badge {
+  transform: scale(1.05);
+  transition: transform 0.2s ease;
+}
+
+/* Quota status colors */
+.text-primary {
+  color: var(--primary);
+}
+
+/* Better spacing for badge stacks */
+.badge-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-end;
+}
+
+/* Responsive badge adjustments */
 @media (max-width: 768px) {
-  .navbar-menu {
-    gap: var(--spacing-md);
+  .max-w-\[60\%\] {
+    max-width: 50%;
   }
   
-  .btn {
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-size: 0.8rem;
-  }
-  
-  .modal {
-    margin: var(--spacing-md);
-  }
-  
-  .card {
-    border-radius: var(--radius-lg);
+  .badge.text-xs {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.3rem;
+    min-height: 16px;
+    line-height: 1;
   }
 }

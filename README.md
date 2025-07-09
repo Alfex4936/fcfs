@@ -1,5 +1,7 @@
 # FCFS (First Come First Serve) 시스템
 
+![image](https://github.com/user-attachments/assets/ebe641e7-6966-4805-8ba2-74b122826cf3)
+
 ## 프로젝트 개요
 Spring Boot와 Redis Cluster를 활용한 고성능 선착순 시스템입니다.
 
