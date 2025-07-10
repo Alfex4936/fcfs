@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import csw.fcfs.claim.Claim;
@@ -23,7 +24,6 @@ import csw.fcfs.storage.StorageService;
 import csw.fcfs.user.UserAccount;
 import csw.fcfs.user.dto.UserDto;
 import csw.fcfs.user.repository.UserAccountRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -101,19 +101,8 @@ public class PostService {
         }
     }
 
-    public PostDto getPost(Long id) {
-        Post post = postRepository.findByIdWithOwner(id)
-                .orElseThrow(() -> new IllegalArgumentException("Post not found"));
-        
-        // If post is private, throw exception (no access without authentication)
-        if (post.getVisibility() == PostVisibility.PRIVATE) {
-            throw new IllegalArgumentException("This post is private");
-        }
-        
-        return toDto(post);
-    }
-
     @Deprecated // Use getAllVisiblePosts instead
+    @Transactional(readOnly = true)
     public List<PostDto> getAllPosts() {
         return postRepository.findAllWithOwner().stream()
                 .map(this::toDto)
@@ -121,11 +110,13 @@ public class PostService {
     }
 
     @Deprecated // Use getAllVisiblePosts instead
+    @Transactional(readOnly = true)
     public Page<PostDto> getAllPosts(Pageable pageable) {
         Page<Post> posts = postRepository.findAllWithOwner(pageable);
         return posts.map(this::toDto);
     }
 
+    @Transactional(readOnly = true)
     public List<PostAdminDto> getAllPostsForAdmin() {
         return postRepository.findAllWithOwnerAndClaims().stream()  // N+1 문제 해결
                 .map(this::toAdminDto)
@@ -133,17 +124,20 @@ public class PostService {
     }
 
     // Privacy-aware post retrieval methods
+    @Transactional(readOnly = true)
     public List<PostDto> getAllPublicPosts() {
         return postRepository.findAllPublicWithOwner().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public Page<PostDto> getAllPublicPosts(Pageable pageable) {
         Page<Post> posts = postRepository.findAllPublicWithOwner(pageable);
         return posts.map(this::toDto);
     }
 
+    @Transactional(readOnly = true)
     public List<PostDto> getAllVisiblePosts(Principal principal) {
         if (principal == null) {
             return getAllPublicPosts();
@@ -157,6 +151,7 @@ public class PostService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public Page<PostDto> getAllVisiblePosts(Principal principal, Pageable pageable) {
         if (principal == null) {
             return getAllPublicPosts(pageable);
@@ -169,6 +164,7 @@ public class PostService {
         return posts.map(this::toDto);
     }
 
+    @Transactional(readOnly = true)
     public PostDto getPostByShareCode(UUID shareCode) {
         Post post = postRepository.findByShareCodeWithOwner(shareCode)
                 .orElseThrow(() -> new IllegalArgumentException("Post not found"));
@@ -176,6 +172,7 @@ public class PostService {
     }
 
     // Enhanced getPost with privacy check
+    @Transactional(readOnly = true)
     public PostDto getPost(Long id, Principal principal) {
         Post post = postRepository.findByIdWithOwner(id)
                 .orElseThrow(() -> new IllegalArgumentException("Post not found"));
@@ -195,6 +192,13 @@ public class PostService {
         }
         
         return toDto(post);
+    }
+
+    // Backward-compatible method for public posts only
+    @Deprecated
+    @Transactional(readOnly = true)
+    public PostDto getPost(Long id) {
+        return getPost(id, null);
     }
 
     private PostDto toDto(Post post) {

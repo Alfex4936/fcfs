@@ -12,10 +12,12 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 
-import csw.fcfs.config.security.jwt.JwtTokenProvider;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -24,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import csw.fcfs.config.security.jwt.JwtTokenProvider;
 import csw.fcfs.post.dto.PostDto;
 import csw.fcfs.storage.StorageService;
 
@@ -48,11 +51,17 @@ public class PostControllerTests {
     @Test
     @WithMockUser(username = "testuser")
     public void shouldCreatePost() throws Exception {
-        PostDto postDto = new PostDto(null, "Test Title", "Test Description", (short) 10, Instant.now(), Instant.now().plusSeconds(3600), Collections.singletonList("test"), Collections.emptyList(), 0);
+        PostDto postDto = PostDto.withAuthor(null, "Test Title", "Test Description", (short) 10, 
+                Instant.now(), Instant.now().plusSeconds(3600), 
+                Collections.singletonList("test"), Collections.emptyList(), 
+                0, "testuser", null);
         MockMultipartFile postFile = new MockMultipartFile("post", "", "application/json", objectMapper.writeValueAsBytes(postDto));
         MockMultipartFile imageFile = new MockMultipartFile("images", "test.jpg", "image/jpeg", "test image content".getBytes());
 
-        given(postService.createPost(any(), any(), any())).willReturn(new PostDto(1L, "Test Title", "Test Description", (short) 10, postDto.openAt(), postDto.closeAt(), postDto.tags(), List.of("test.jpg"), 0));
+        given(postService.createPost(any(), any(), any())).willReturn(
+                PostDto.withAuthor(1L, "Test Title", "Test Description", (short) 10, 
+                        postDto.openAt(), postDto.closeAt(), postDto.tags(), List.of("test.jpg"), 
+                        0, "testuser", null));
 
         mvc.perform(multipart("/api/posts")
                         .file(postFile)
@@ -65,8 +74,11 @@ public class PostControllerTests {
 
     @Test
     public void shouldGetPost() throws Exception {
-        PostDto postDto = new PostDto(1L, "Test Title", "Test Description", (short) 10, Instant.now(), Instant.now().plusSeconds(3600), Collections.singletonList("test"), Collections.emptyList(), 0);
-        given(postService.getPost(1L)).willReturn(postDto);
+        PostDto postDto = PostDto.withAuthor(1L, "Test Title", "Test Description", (short) 10, 
+                Instant.now(), Instant.now().plusSeconds(3600), 
+                Collections.singletonList("test"), Collections.emptyList(), 
+                0, "testuser", null);
+        given(postService.getPost(1L, null)).willReturn(postDto);
 
         mvc.perform(get("/api/posts/1"))
                 .andExpect(status().isOk())
@@ -76,23 +88,35 @@ public class PostControllerTests {
 
     @Test
     public void shouldGetAllPosts() throws Exception {
-        PostDto postDto = new PostDto(1L, "Test Title", "Test Description", (short) 10, Instant.now(), Instant.now().plusSeconds(3600), Collections.singletonList("test"), Collections.emptyList(), 0);
-        given(postService.getAllPosts()).willReturn(Collections.singletonList(postDto));
+        PostDto postDto = PostDto.withAuthor(1L, "Test Title", "Test Description", (short) 10, 
+                Instant.now(), Instant.now().plusSeconds(3600), 
+                Collections.singletonList("test"), Collections.emptyList(), 
+                0, "testuser", null);
+        Page<PostDto> page = new PageImpl<>(Collections.singletonList(postDto), PageRequest.of(0, 9), 1);
+        given(postService.getAllVisiblePosts(any(), any())).willReturn(page);
 
-        mvc.perform(get("/api/posts"))
+        mvc.perform(get("/api/posts")
+                .param("page", "0")
+                .param("size", "9"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(1L))
-                .andExpect(jsonPath("$[0].title").value("Test Title"));
+                .andExpect(jsonPath("$.content[0].id").value(1L))
+                .andExpect(jsonPath("$.content[0].title").value("Test Title"));
     }
 
     @Test
     @WithMockUser(username = "testuser")
     public void shouldUpdatePost() throws Exception {
-        PostDto postDto = new PostDto(1L, "Updated Title", "Updated Description", (short) 20, Instant.now(), Instant.now().plusSeconds(7200), Collections.singletonList("updated"), Collections.emptyList(), 0);
+        PostDto postDto = PostDto.withAuthor(1L, "Updated Title", "Updated Description", (short) 20, 
+                Instant.now(), Instant.now().plusSeconds(7200), 
+                Collections.singletonList("updated"), Collections.emptyList(), 
+                0, "testuser", null);
         MockMultipartFile postFile = new MockMultipartFile("post", "", "application/json", objectMapper.writeValueAsBytes(postDto));
         MockMultipartFile imageFile = new MockMultipartFile("images", "updated.jpg", "image/jpeg", "updated image content".getBytes());
 
-        given(postService.updatePost(any(), any(), any(), any())).willReturn(new PostDto(1L, "Updated Title", "Updated Description", (short) 20, postDto.openAt(), postDto.closeAt(), postDto.tags(), List.of("updated.jpg"), 0));
+        given(postService.updatePost(any(), any(), any(), any())).willReturn(
+                PostDto.withAuthor(1L, "Updated Title", "Updated Description", (short) 20, 
+                        postDto.openAt(), postDto.closeAt(), postDto.tags(), 
+                        List.of("updated.jpg"), 0, "testuser", null));
 
         mvc.perform(multipart("/api/posts/1")
                         .file(postFile)

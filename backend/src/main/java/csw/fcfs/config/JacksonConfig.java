@@ -12,6 +12,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.cfg.JsonNodeFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
 import com.fasterxml.jackson.databind.util.StdDateFormat;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -59,7 +61,7 @@ public class JacksonConfig {
                 .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES) // 알 수 없는 속성 무시
 
                 // 보안: 다형성 역직렬화 비활성화 (의도적으로 사용하지 않는 한)
-                .deactivateDefaultTyping()
+//                .deactivateDefaultTyping()
 
                 // 가시성: 필드만 직렬화, getter/setter 무시
                 .visibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE)
@@ -77,6 +79,15 @@ public class JacksonConfig {
                         .withTimeZone(TimeZone.getTimeZone("UTC"))
                 )
                 .build();
+
+        PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
+                .allowIfSubType(Object.class)
+                .build();
+
+        mapper.activateDefaultTyping(
+                ptv,
+                ObjectMapper.DefaultTyping.NON_FINAL
+        );
 
         // Spring Data의 Page 객체를 위한 MixIn 추가 (페이지네이션 최적화)
         mapper.addMixIn(Page.class, PageMixIn.class);

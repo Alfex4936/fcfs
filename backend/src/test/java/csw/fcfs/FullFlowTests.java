@@ -12,10 +12,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import csw.fcfs.claim.ClaimRepository;
-import csw.fcfs.post.Post;
-import csw.fcfs.post.repository.PostRepository;
-import csw.fcfs.service.RedisService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,8 +26,10 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import csw.fcfs.claim.ClaimService;
+import csw.fcfs.post.PostVisibility;
 import csw.fcfs.post.dto.PostDto;
+import csw.fcfs.post.repository.PostRepository;
+import csw.fcfs.service.RedisService;
 import csw.fcfs.user.OAuth2Provider;
 import csw.fcfs.user.Role;
 import csw.fcfs.user.UserAccount;
@@ -52,12 +50,6 @@ public class FullFlowTests {
 
     @Autowired
     private PostRepository postRepository;
-
-    @Autowired
-    private ClaimRepository claimRepository;
-
-    @Autowired
-    private ClaimService claimService;
 
     @Autowired
     private RedisService redisService;
@@ -125,7 +117,10 @@ public class FullFlowTests {
     @WithMockUser(username = "testuser@test.com")
     public void fullFlowTest() throws Exception {
         // 1. Create a post
-        PostDto postDto = new PostDto(null, "Test Title", "Test Description", (short) 2, Instant.now(), Instant.now().plusSeconds(3600), Collections.singletonList("test"), Collections.emptyList(), 0);
+        PostDto postDto = PostDto.withAuthor(null, "Test Title", "Test Description", (short) 2, 
+                Instant.now(), Instant.now().plusSeconds(3600), 
+                Collections.singletonList("test"), Collections.emptyList(), 
+                0, "testuser@test.com", null);
         MockMultipartFile postFile = new MockMultipartFile("post", "", "application/json", objectMapper.writeValueAsBytes(postDto));
         MockMultipartFile imageFile = new MockMultipartFile("images", "test.jpg", "image/jpeg", "test image content".getBytes());
 
@@ -142,7 +137,9 @@ public class FullFlowTests {
         testPostIds.add(postId); // Track this post for cleanup
 
         // 2. Update the post
-        PostDto updatedDto = new PostDto(postId, "Updated Title", "Updated Description", (short) 2, postDto.openAt(), postDto.closeAt(), postDto.tags(), postDto.images(), 0);
+        PostDto updatedDto = PostDto.withAllFields(postId, "Updated Title", "Updated Description", (short) 2, 
+                postDto.openAt(), postDto.closeAt(), postDto.tags(), postDto.images(), 
+                0, "testuser@test.com", null, PostVisibility.PUBLIC, postDto.shareCode());
         MockMultipartFile updatedPostFile = new MockMultipartFile("post", "", "application/json", objectMapper.writeValueAsBytes(updatedDto));
 
         mvc.perform(multipart("/api/posts/" + postId)

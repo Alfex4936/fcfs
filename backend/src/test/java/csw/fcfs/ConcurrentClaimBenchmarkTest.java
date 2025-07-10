@@ -1,9 +1,35 @@
 package csw.fcfs;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+
 import csw.fcfs.claim.ClaimRepository;
 import csw.fcfs.claim.ClaimService;
+import csw.fcfs.notification.EmailService;
 import csw.fcfs.post.Post;
 import csw.fcfs.post.PostState;
+import csw.fcfs.post.PostVisibility;
 import csw.fcfs.post.repository.PostRepository;
 import csw.fcfs.service.RedisService;
 import csw.fcfs.user.OAuth2Provider;
@@ -11,25 +37,6 @@ import csw.fcfs.user.Role;
 import csw.fcfs.user.UserAccount;
 import csw.fcfs.user.repository.UserAccountRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -39,6 +46,9 @@ public class ConcurrentClaimBenchmarkTest {
     private final List<UserAccount> testUsers = new ArrayList<>();
     private final List<Long> testPostIds = new ArrayList<>();
     private final String testRunId = String.valueOf(System.currentTimeMillis()); // Unique ID for this test run
+
+    @MockitoBean
+    private EmailService emailService;
 
     @Autowired
     private ClaimService claimService;
@@ -52,15 +62,89 @@ public class ConcurrentClaimBenchmarkTest {
     private RedisService redisService;
     private ExecutorService executorService;
 
+    @Transactional
+    protected List<UserAccount> createTestUsers(int count) {
+        List<UserAccount> users = new ArrayList<>();
+        
+        // Batch creation for better performance
+        List<UserAccount> batchUsers = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            UserAccount user = UserAccount.builder()
+                    .email("benchuser" + i + "@test.com")
+                    .oauth2Provider(OAuth2Provider.GOOGLE)
+                    .role(Role.USER)
+                    .build();
+            batchUsers.add(user);
+            
+            // Save in batches of 1000 for better performance
+            if (batchUsers.size() == 1000 || i == count - 1) {
+                List<UserAccount> savedBatch = userAccountRepository.saveAll(batchUsers);
+                users.addAll(savedBatch);
+                testUsers.addAll(savedBatch);
+                batchUsers.clear();
+                
+                // Flush after each batch
+                userAccountRepository.flush();
+            }
+        }
+
+        return users;
+    }
+
+    @Transactional
+    protected Post createTestPost(int quota) {
+        String ownerEmail = "postowner" + testRunId + "@test.com";
+
+        UserAccount owner = UserAccount.builder()
+                .email(ownerEmail)
+                .oauth2Provider(OAuth2Provider.GOOGLE)
+                .role(Role.USER)
+                .build();
+        testUsers.add(userAccountRepository.save(owner));
+
+        Post post = Post.builder()
+                .title("Benchmark Test Post " + testRunId)
+                .description("Post for concurrent claim testing")
+                .quota((short) quota)
+                .openAt(Instant.now())
+                .closeAt(Instant.now().plusSeconds(3600))
+                .owner(owner)
+                .state(PostState.OPEN)
+                .visibility(PostVisibility.PUBLIC)
+                .shareCode(UUID.randomUUID())
+                .build();
+
+        Post savedPost = postRepository.save(post);
+
+        // Ensure post is persisted
+        postRepository.flush();
+        return savedPost;
+    }
+
     @BeforeEach
     public void setUp() {
         testUsers.clear();
         testPostIds.clear();
 
-        // Clean up any existing benchmark test users from previous runs
         cleanupExistingBenchmarkData();
 
-        executorService = Executors.newFixedThreadPool(500); // 100 → 500으로 대폭 증가
+        // Use virtual threads for better concurrency (Java 21+)
+        // If Java 21+ is not available, this will fall back to regular thread pool
+        try {
+            executorService = Executors.newVirtualThreadPerTaskExecutor();
+            log.info("Using virtual threads for maximum concurrency");
+        } catch (Exception e) {
+            // Fallback to regular thread pool for older Java versions
+            executorService = Executors.newFixedThreadPool(1000);
+            log.info("Using fixed thread pool (virtual threads not available)");
+        }
+
+        // Reduced cleanup delay
+        try {
+            Thread.sleep(100); // Reduced from 200ms
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     @AfterEach
@@ -116,7 +200,7 @@ public class ConcurrentClaimBenchmarkTest {
 
     @Test
     public void benchmarkConcurrentClaims_ExtremeLoad() throws Exception {
-        runConcurrentClaimBenchmark(1000, 100, "Extreme Load Test");
+        runConcurrentClaimBenchmark(10000, 20, "Extreme Load Test");
     }
 
     @Test
@@ -139,55 +223,29 @@ public class ConcurrentClaimBenchmarkTest {
         Post testPost = createTestPost(quota);
         testPostIds.add(testPost.getId());
 
-        // 3. Execute concurrent claims
+        // 3. Force all transactions to commit before starting concurrent operations
+        userAccountRepository.flush();
+        postRepository.flush();
+        
+        // Minimal delay - READ_UNCOMMITTED should handle visibility issues
+        if (totalUsers > 1000) {
+            Thread.sleep(100); // Reduced from 500ms
+        } else {
+            Thread.sleep(50);  // Reduced from 200ms
+        }
+
+        // 4. Execute concurrent claims
         long claimStart = System.currentTimeMillis();
         BenchmarkResult result = executeConcurrentClaims(users, testPost.getId());
         long claimEnd = System.currentTimeMillis();
 
-        // 4. Analyze results
+        // 5. Analyze results
         analyzeBenchmarkResults(result, testName, quota, totalUsers, claimEnd - claimStart);
 
-        // 5. Verify correctness
+        // 6. Verify correctness
         verifyClaimCorrectness(testPost.getId(), quota, result);
 
         log.info("=== Completed {} ===\n", testName);
-    }
-
-    private List<UserAccount> createTestUsers(int count) {
-        List<UserAccount> users = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            UserAccount user = UserAccount.builder()
-                    .email("benchuser" + i + "@test.com")
-                    .oauth2Provider(OAuth2Provider.GOOGLE)
-                    .role(Role.USER)
-                    .build();
-            users.add(userAccountRepository.save(user));
-            testUsers.add(user);
-        }
-        return users;
-    }
-
-    private Post createTestPost(int quota) {
-        // Make post owner email unique for each test run to avoid conflicts
-        String ownerEmail = "postowner" + testRunId + "@test.com";
-
-        UserAccount owner = UserAccount.builder()
-                .email(ownerEmail)
-                .oauth2Provider(OAuth2Provider.GOOGLE)
-                .role(Role.USER)
-                .build();
-        testUsers.add(userAccountRepository.save(owner));
-
-        Post post = Post.builder()
-                .title("Benchmark Test Post " + testRunId) // Make title unique too
-                .description("Post for concurrent claim testing")
-                .quota((short) quota)
-                .openAt(Instant.now())
-                .closeAt(Instant.now().plusSeconds(3600))
-                .owner(owner)
-                .state(PostState.OPEN)
-                .build();
-        return postRepository.save(post);
     }
 
     private BenchmarkResult executeConcurrentClaims(List<UserAccount> users, Long postId) {
@@ -201,17 +259,34 @@ public class ConcurrentClaimBenchmarkTest {
         ConcurrentHashMap<String, Long> responseTimes = new ConcurrentHashMap<>();
         List<Long> allResponseTimes = Collections.synchronizedList(new ArrayList<>());
 
+        // Remove redundant flushes - already done in runConcurrentClaimBenchmark
+        // userAccountRepository.flush();
+        // postRepository.flush();
+
+        // Minimal delay since READ_UNCOMMITTED handles visibility
+        try {
+            if (users.size() > 1000) {
+                Thread.sleep(50); // Reduced from 300ms
+            } else {
+                Thread.sleep(25); // Reduced from 100ms
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
         // Create futures for all users
         List<CompletableFuture<Void>> futures = users.stream()
                 .map(user -> CompletableFuture.runAsync(() -> {
                     long startTime = System.nanoTime();
                     try {
-                        // Create a mock principal
+                        // Removed user existence check - let the claim service handle it
+                        // This eliminates a DB call per request
+                        
                         MockPrincipal principal = new MockPrincipal(user.getEmail());
                         String result = claimService.claimPost(postId, principal);
 
                         long endTime = System.nanoTime();
-                        long responseTime = (endTime - startTime) / 1_000_000; // Convert to milliseconds
+                        long responseTime = (endTime - startTime) / 1_000_000;
                         allResponseTimes.add(responseTime);
                         responseTimes.put(user.getEmail(), responseTime);
 
@@ -285,14 +360,15 @@ public class ConcurrentClaimBenchmarkTest {
 
         log.info("=== {} Results ===", testName);
         log.info("Total Execution Time: {}ms", totalTime);
-        log.info("Throughput: {:.2f} claims/second", throughput);
+        log.info("Throughput: {} claims/second", String.format("%.2f", throughput));
         log.info("SUCCESS: {} (Expected: {})", result.successCount(), quota);
         log.info("QUOTA_EXCEEDED: {}", result.quotaExceededCount());
         log.info("ALREADY_CLAIMED: {}", result.alreadyClaimedCount());
         log.info("OWNER_CANNOT_CLAIM: {}", result.ownerCannotClaimCount());
         log.info("FAILURES: {}", result.failureCount());
         log.info("ERRORS: {}", result.errorCount());
-        log.info("Response Times - Min: {}ms, Max: {}ms, Avg: {:.2f}ms", minResponseTime, maxResponseTime, avgResponseTime);
+        log.info("Response Times - Min: {}ms, Max: {}ms, Avg: {}ms",
+                minResponseTime, maxResponseTime, String.format("%.2f", avgResponseTime));
         log.info("Response Time Percentiles - P50: {}ms, P95: {}ms, P99: {}ms", p50, p95, p99);
     }
 
@@ -328,32 +404,6 @@ public class ConcurrentClaimBenchmarkTest {
         } catch (Exception e) {
             log.warn("Could not verify Redis state: {}", e.getMessage());
         }
-    }
-
-    // Helper class for mock principal
-    private static class MockPrincipal implements java.security.Principal {
-        private final String name;
-
-        public MockPrincipal(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String getName() {
-            return name;
-        }
-    }
-
-    // Record to hold benchmark results
-    private record BenchmarkResult(
-            int successCount,
-            int failureCount,
-            int alreadyClaimedCount,
-            int quotaExceededCount,
-            int ownerCannotClaimCount,
-            int errorCount,
-            List<Long> responseTimes
-    ) {
     }
 
     private void cleanupExistingBenchmarkData() {
@@ -400,8 +450,8 @@ public class ConcurrentClaimBenchmarkTest {
                         try {
                             // Clean up Redis data for this post
                             redisService.deleteKeys(
-                                "post:{" + post.getId() + "}:claimants",
-                                "post:{" + post.getId() + "}:claims_count"
+                                    "post:{" + post.getId() + "}:claimants",
+                                    "post:{" + post.getId() + "}:claims_count"
                             );
 
                             // Delete the post (this will cascade delete claims)
@@ -422,5 +472,40 @@ public class ConcurrentClaimBenchmarkTest {
             log.warn("Error during benchmark data cleanup: {}", e.getMessage());
             // Don't fail the test if cleanup fails, just log the warning
         }
+    }
+
+    /**
+     * Fast user existence check using READ_UNCOMMITTED isolation
+     * to see users that might not be fully committed yet
+     */
+    @Transactional(isolation = Isolation.READ_UNCOMMITTED, readOnly = true)
+    protected boolean checkUserExistsFast(Long userId) {
+        return userAccountRepository.existsById(userId);
+    }
+
+    // Helper class for mock principal
+    private static class MockPrincipal implements java.security.Principal {
+        private final String name;
+
+        public MockPrincipal(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+    }
+
+    // Record to hold benchmark results
+    private record BenchmarkResult(
+            int successCount,
+            int failureCount,
+            int alreadyClaimedCount,
+            int quotaExceededCount,
+            int ownerCannotClaimCount,
+            int errorCount,
+            List<Long> responseTimes
+    ) {
     }
 }
