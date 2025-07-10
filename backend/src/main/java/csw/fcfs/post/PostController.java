@@ -2,6 +2,7 @@ package csw.fcfs.post;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
@@ -44,8 +45,8 @@ public class PostController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<PostDto> getPost(@PathVariable Long id) {
-        return ResponseEntity.ok(postService.getPost(id));
+    public ResponseEntity<PostDto> getPost(@PathVariable Long id, Principal principal) {
+        return ResponseEntity.ok(postService.getPost(id, principal));
     }
 
     @GetMapping
@@ -53,7 +54,8 @@ public class PostController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "9") int size,
             @RequestParam(defaultValue = "id") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortDir) {
+            @RequestParam(defaultValue = "desc") String sortDir,
+            Principal principal) {
 
         // 정렬 방향 설정
         Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ?
@@ -62,7 +64,7 @@ public class PostController {
         // Pageable 객체 생성
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
-        return ResponseEntity.ok(postService.getAllPosts(pageable));
+        return ResponseEntity.ok(postService.getAllVisiblePosts(principal, pageable));
     }
 
     @PutMapping("/{id}")
@@ -90,5 +92,27 @@ public class PostController {
         Resource file = storageService.loadAsResource(filename);
         return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,
                 "attachment; filename=\"" + file.getFilename() + "\"").body(file);
+    }
+
+    @GetMapping("/share/{shareCode}")
+    public ResponseEntity<PostDto> getPostByShareCode(@PathVariable UUID shareCode) {
+        return ResponseEntity.ok(postService.getPostByShareCode(shareCode));
+    }
+
+    @GetMapping("/public")
+    public ResponseEntity<Page<PostDto>> getPublicPosts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "9") int size,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+
+        // 정렬 방향 설정
+        Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ?
+            Sort.Direction.DESC : Sort.Direction.ASC;
+
+        // Pageable 객체 생성
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+        return ResponseEntity.ok(postService.getAllPublicPosts(pageable));
     }
 }

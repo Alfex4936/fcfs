@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.YearMonth;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
@@ -59,6 +60,8 @@ public class PostService {
                 .images(imagePaths)
                 .owner(user)
                 .state(PostState.SCHEDULED)
+                .visibility(postDto.visibility() != null ? postDto.visibility() : PostVisibility.PUBLIC)
+                .shareCode(UUID.randomUUID())
                 .build();
 
         Post savedPost = postRepository.save(post);
@@ -99,19 +102,27 @@ public class PostService {
     }
 
     public PostDto getPost(Long id) {
-        Post post = postRepository.findByIdWithOwner(id)  // N+1 문제 해결
+        Post post = postRepository.findByIdWithOwner(id)
                 .orElseThrow(() -> new IllegalArgumentException("Post not found"));
+        
+        // If post is private, throw exception (no access without authentication)
+        if (post.getVisibility() == PostVisibility.PRIVATE) {
+            throw new IllegalArgumentException("This post is private");
+        }
+        
         return toDto(post);
     }
 
+    @Deprecated // Use getAllVisiblePosts instead
     public List<PostDto> getAllPosts() {
-        return postRepository.findAllWithOwner().stream()  // N+1 문제 해결
+        return postRepository.findAllWithOwner().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
 
+    @Deprecated // Use getAllVisiblePosts instead
     public Page<PostDto> getAllPosts(Pageable pageable) {
-        Page<Post> posts = postRepository.findAllWithOwner(pageable);  // N+1 문제 해결
+        Page<Post> posts = postRepository.findAllWithOwner(pageable);
         return posts.map(this::toDto);
     }
 
@@ -119,6 +130,71 @@ public class PostService {
         return postRepository.findAllWithOwnerAndClaims().stream()  // N+1 문제 해결
                 .map(this::toAdminDto)
                 .collect(Collectors.toList());
+    }
+
+    // Privacy-aware post retrieval methods
+    public List<PostDto> getAllPublicPosts() {
+        return postRepository.findAllPublicWithOwner().stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    public Page<PostDto> getAllPublicPosts(Pageable pageable) {
+        Page<Post> posts = postRepository.findAllPublicWithOwner(pageable);
+        return posts.map(this::toDto);
+    }
+
+    public List<PostDto> getAllVisiblePosts(Principal principal) {
+        if (principal == null) {
+            return getAllPublicPosts();
+        }
+        
+        UserAccount user = userAccountRepository.findByEmail(principal.getName())
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        
+        return postRepository.findAllVisibleToUserWithOwner(user).stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    public Page<PostDto> getAllVisiblePosts(Principal principal, Pageable pageable) {
+        if (principal == null) {
+            return getAllPublicPosts(pageable);
+        }
+        
+        UserAccount user = userAccountRepository.findByEmail(principal.getName())
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        
+        Page<Post> posts = postRepository.findAllVisibleToUserWithOwner(user, pageable);
+        return posts.map(this::toDto);
+    }
+
+    public PostDto getPostByShareCode(UUID shareCode) {
+        Post post = postRepository.findByShareCodeWithOwner(shareCode)
+                .orElseThrow(() -> new IllegalArgumentException("Post not found"));
+        return toDto(post);
+    }
+
+    // Enhanced getPost with privacy check
+    public PostDto getPost(Long id, Principal principal) {
+        Post post = postRepository.findByIdWithOwner(id)
+                .orElseThrow(() -> new IllegalArgumentException("Post not found"));
+        
+        // Check if user can access this post
+        if (post.getVisibility() == PostVisibility.PRIVATE) {
+            if (principal == null) {
+                throw new IllegalArgumentException("This post is private");
+            }
+            
+            UserAccount user = userAccountRepository.findByEmail(principal.getName())
+                    .orElseThrow(() -> new IllegalArgumentException("User not found"));
+            
+            if (!post.getOwner().equals(user)) {
+                throw new IllegalArgumentException("You don't have permission to view this post");
+            }
+        }
+        
+        return toDto(post);
     }
 
     private PostDto toDto(Post post) {
@@ -136,8 +212,10 @@ public class PostService {
                 post.getTags() != null ? Arrays.asList(post.getTags()) : List.of(),
                 post.getImages() != null ? Arrays.asList(post.getImages()) : List.of(),
                 currentClaims,
-                post.getOwner().getEmail(),  // 작성자 이메일 추가
-                post.getOwner().getId()      // 작성자 ID 추가
+                post.getOwner().getEmail(),
+                post.getOwner().getId(),
+                post.getVisibility(),
+                post.getShareCode()
         );
     }
 
@@ -154,7 +232,9 @@ public class PostService {
                 post.getCloseAt(),
                 post.getTags() != null ? Arrays.asList(post.getTags()) : List.of(),
                 post.getImages() != null ? Arrays.asList(post.getImages()) : List.of(),
-                claims
+                claims,
+                post.getVisibility(),
+                post.getShareCode()
         );
     }
 
@@ -200,6 +280,8 @@ public class PostService {
         post.setCloseAt(postDto.closeAt());
         post.setTags(postDto.tags() != null ? postDto.tags().toArray(new String[0]) : null);
         post.setImages(imagePaths);
+        post.setVisibility(postDto.visibility() != null ? postDto.visibility() : post.getVisibility());
+        // Note: shareCode is not updated - it remains the same for the lifetime of the post
 
         Post updatedPost = postRepository.save(post);
         return toDto(updatedPost);

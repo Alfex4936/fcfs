@@ -1,16 +1,30 @@
 package csw.fcfs.post;
 
-import csw.fcfs.user.UserAccount;
-import io.hypersistence.utils.hibernate.type.array.StringArrayType;
-import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp; // hibernate v6.6.15
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.Type;
-import org.hibernate.type.SqlTypes;
-
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
+
+import org.hibernate.annotations.CreationTimestamp; // hibernate v6.6.15
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import csw.fcfs.user.UserAccount;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Getter
@@ -40,6 +54,13 @@ public class Post {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PostState state;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PostVisibility visibility;
+
+    @Column(name = "share_code", nullable = false, unique = true)
+    private UUID shareCode;
 
     @Column(name = "open_at", nullable = false)
     private Instant openAt;
