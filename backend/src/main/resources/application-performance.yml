@@ -1,13 +1,13 @@
-# HikariCP 최적화 설정
+# HikariCP 최적화 설정 - Enhanced for extreme load testing
 spring:
   datasource:
     hikari:
-      maximum-pool-size: 50        # 증가 (기본: 10)
-      minimum-idle: 20             # 증가 (기본: 10)
-      connection-timeout: 3000     # 3초
+      maximum-pool-size: 100       # 대폭 증가 for 10K concurrent users
+      minimum-idle: 50             # 증가 (기본: 10)
+      connection-timeout: 5000     # 5초 (increased for high load)
       idle-timeout: 300000         # 5분
       max-lifetime: 900000         # 15분
-      leak-detection-threshold: 60000  # 연결 누수 감지
+      leak-detection-threshold: 30000  # 연결 누수 감지 (더 빠른 감지)
 
   # OSIV 비활성화 - 프로덕션 최적화
   jpa:
@@ -18,6 +18,18 @@ spring:
         jdbc:
           batch_size: 50
         order_inserts: true
+        order_updates: true
+        batch_versioned_data: true
+
+  # Redis 연결 풀 최적화
+  data:
+    redis:
+      jedis:
+        pool:
+          max-active: 200          # Redis 연결 대폭 증가
+          max-idle: 100
+          min-idle: 20
+          max-wait: 3000ms
         order_updates: true
         # 쿼리 계획 캐시 최적화
         query:

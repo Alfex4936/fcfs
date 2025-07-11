@@ -29,6 +29,7 @@ public class ClaimService {
 //        propagation = Propagation.REQUIRES_NEW, // never inherit a read-only TX
 //        readOnly = false                        // explicitly writable
 //    )
+    @Deprecated
     public String claimPost(Long postId, Principal principal) {
         // Redis 캐싱으로 DB 조회 최소화
         Post post = claimCacheService.getPostFromCache(postId);
@@ -47,6 +48,35 @@ public class ClaimService {
         String result = redisService.executeScript(
                 loadScript("claim.lua"),
                 Collections.singletonList(String.valueOf(postId)),
+                String.valueOf(user.getId()),
+                String.valueOf(post.getQuota()));
+
+        if ("SUCCESS".equals(result)) {
+            // 비동기 처리는 응답에 영향 없음
+            claimAsyncService.saveClaimAndNotify(post, user);
+        }
+
+        return result;
+    }
+
+    // Optimized version that bypasses cache for better performance
+    public String claimPost(Post post, UserAccount user) {
+        // Skip cache service - use pre-loaded entities directly
+        // This eliminates potential database hits from cache misses
+        
+        // 게시물 소유자가 클레임을 시도하는 경우 차단
+        if (post.getOwner().getId().equals(user.getId())) {
+            return "OWNER_CANNOT_CLAIM";
+        }
+
+        // 🔒 Privacy check: 비공개 게시물인 경우 소유자가 아니면 클레임 불가
+        if (post.getVisibility() == PostVisibility.PRIVATE) {
+            return "POST_NOT_ACCESSIBLE";
+        }
+
+        String result = redisService.executeScript(
+                loadScript("claim.lua"),
+                Collections.singletonList(String.valueOf(post.getId())),
                 String.valueOf(user.getId()),
                 String.valueOf(post.getQuota()));
 

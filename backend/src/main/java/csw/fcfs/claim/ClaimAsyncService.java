@@ -1,7 +1,5 @@
 package csw.fcfs.claim;
 
-import java.util.Optional;
-
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -34,38 +32,18 @@ public class ClaimAsyncService {
     )
     public void saveClaimAndNotify(Post post, UserAccount user) {
         try {
-            // Minimal delay since READ_UNCOMMITTED should see data immediately
-            Thread.sleep(10);
-            
-            // Try direct lookup first - should work with READ_UNCOMMITTED
-            Optional<UserAccount> userOpt = userAccountRepository.findById(user.getId());
-            if (userOpt.isEmpty()) {
-                // Single retry if needed
-                Thread.sleep(25);
-                userOpt = userAccountRepository.findById(user.getId());
-                if (userOpt.isEmpty()) {
-                    log.error("User {} not found after retry, skipping claim save", user.getId());
-                    return;
-                }
-            }
-            
-            UserAccount freshUser = userOpt.get();
-            
-            Post freshPost = postRepository.findById(post.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Post not found: " + post.getId()));
+            // No sleep needed! No database lookups needed!
+            // The passed entities are already valid - Hibernate will handle attachment
             
             Claim claim = Claim.builder()
-                    .post(freshPost)
-                    .user(freshUser)
+                    .post(post)  // Use directly - Hibernate attaches to current session
+                    .user(user)  // Use directly - Hibernate attaches to current session
                     .build();
             claimRepository.save(claim);
 
-            String subject = "Congratulations! You've successfully claimed the post: " + freshPost.getTitle();
-            String text = "Dear " + freshUser.getEmail() + ",\n\nCongratulations! You have successfully claimed the post titled '" + freshPost.getTitle() + "'.\n\nThank you for using our platform!\n\nBest regards,\nThe FCFS Team";
-            emailService.sendEmail(freshUser.getEmail(), subject, text);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("Interrupted while saving claim for user {} and post {}", user.getId(), post.getId());
+            String subject = "Congratulations! You've successfully claimed the post: " + post.getTitle();
+            String text = "Dear " + user.getEmail() + ",\n\nCongratulations! You have successfully claimed the post titled '" + post.getTitle() + "'.\n\nThank you for using our platform!\n\nBest regards,\nThe FCFS Team";
+            emailService.sendEmail(user.getEmail(), subject, text);
         } catch (Exception e) {
             log.error("Failed to save claim for user {} and post {}: {}", user.getId(), post.getId(), e.getMessage());
         }

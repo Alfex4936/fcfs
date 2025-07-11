@@ -12,13 +12,22 @@ version = "0.0.1-SNAPSHOT"
 application {
 	mainClass.set("csw.fcfs.FcfsApplication")
 	applicationDefaultJvmArgs = listOf(
-		"-Xms2G", // Set initial heap size to 2GB
-		"-Xmx8G", // Set max heap size to 8GB
-		"-XX:+UseZGC", // Use Z Garbage Collector
-		"-XX:+ZGenerational", // Enable Generational ZGC (Java 21+)
-		"-XX:TieredStopAtLevel=1", // Reduce JIT compilation overhead
-		"--enable-preview" // Enable Java preview features
+		"-Xms8G", "-Xmx8G",                // fixed heap
+		"-XX:+UseZGC",                     // production-ready ZGC
+		// If you *really* want generational ZGC and accept preview risk:
+		// "-XX:+UnlockExperimentalVMOptions", "-XX:+ZGenerational", "--enable-preview",
+
+		// Container friendliness (override if you pin CPU/memory differently)
+		"-XX:+UseContainerSupport",
+		"-XX:MaxRAMPercentage=75",
+		"-XX:ActiveProcessorCount=4",      // example for 4 vCPUs
+
+		// Reliability & observability
+		"-XX:+HeapDumpOnOutOfMemoryError",
+		"-XX:+ExitOnOutOfMemoryError",
+		"-Xlog:gc*,safepoint*:time,level,tags"
 	)
+
 }
 
 java {

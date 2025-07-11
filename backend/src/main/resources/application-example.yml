@@ -1,6 +1,15 @@
+server:
+  tomcat:
+    threads:
+      max: 400          # raise worker thread cap (default 200)
+      min-spare: 100    # keep enough idle threads for burst traffic
+    accept-count: 200   # backlog when all threads are busy
+    max-connections: 10000   # OS-level connection cap
+    connection-timeout: 5s   # parse-friendly ISO-8601 duration
+    keep-alive-timeout: 30s
+    max-keep-alive-requests: 200
+
 spring:
-  profiles:
-    active: test
   application:
     name: fcfs
   security:
@@ -46,36 +55,38 @@ spring:
             user-info-uri: https://kapi.kakao.com/v2/user/me
             user-name-attribute: id
   datasource:
-    url: jdbc:postgresql://localhost:5432/fcfs
-    username: test
+    url: jdbc:postgresql://localhost:5432/test
+    username: postgres
     password: test
     driver-class-name: org.postgresql.Driver
 
     hikari:
-      maximum-pool-size: 50        # 증가 (기본: 10)
-      minimum-idle: 20             # 증가 (기본: 10)
-      connection-timeout: 3000     # 3초
+      maximum-pool-size: 100        # 증가 (기본: 10)
+      minimum-idle: 50             # 증가 (기본: 10)
+      connection-timeout: 5000     #
       idle-timeout: 300000         # 5분
       max-lifetime: 900000         # 15분
-      leak-detection-threshold: 60000  # 연결 누수 감지
+      leak-detection-threshold: 30000  # 연결 누수 감지
+
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: false
+    open-in-view: false       # OSIV off for transactional safety
+    properties:
+      hibernate:
+        order_inserts: true
+        order_updates: true
+        jdbc:
+          batch_size: 50
+          batch_versioned_data: true
+
   data:
     redis:
-      host: localhost
-      port: 6379
+      client-type: lettuce
       password: test
-      timeout: 1000
+      timeout: 1s
       cluster:
-        lettuce:
-          pool:
-            max-active: 32
-            max-idle: 16
-            min-idle: 0
-            max-wait: -1ms
-        enabled: true  # Set to true to enable Redis Cluster
+        enabled: true # custom setting
         nodes:
           - localhost:9001
           - localhost:9002
@@ -84,6 +95,14 @@ spring:
           - localhost:9005
           - localhost:9006
         max-redirects: 3
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 200
+          max-idle: 100
+          min-idle: 20
+          max-wait: 3s
+
   threads:
     virtual:
       enabled: true
@@ -102,8 +121,6 @@ spring:
         secret-key: YOUR_AWS_SECRET_KEY
       region:
         static: ap-northeast-2
-      stack:
-        auto: false
   flyway:
     baseline-on-migrate: false
 
@@ -111,7 +128,7 @@ jwt:
   secret: test
 
 storage:
-  location: "utest"
+  location: "upload-dir"
   s3:
     bucket-name: your-s3-bucket-name
 

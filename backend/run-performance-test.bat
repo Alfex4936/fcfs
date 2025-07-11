@@ -1,19 +1,25 @@
 @echo off
-echo Running high-performance benchmark tests...
+echo Running ultra-high-performance benchmark tests...
 
-REM JVM tuning for high throughput
-set JAVA_OPTS=-Xms4g -Xmx8g ^
+REM JVM tuning for maximum throughput
+set JAVA_OPTS=-Xms8g -Xmx16g ^
 -XX:+UseG1GC ^
--XX:MaxGCPauseMillis=50 ^
+-XX:MaxGCPauseMillis=20 ^
 -XX:+UseStringDeduplication ^
 -XX:+OptimizeStringConcat ^
--server ^
--XX:+AggressiveOpts
+-XX:+UseCompressedOops ^
+-XX:+AggressiveOpts ^
+-XX:+UseFastAccessorMethods ^
+-server
 
 echo Using JVM options: %JAVA_OPTS%
 
-REM Run the specific extreme load test
-gradlew.bat test --tests "*ConcurrentClaimBenchmarkTest.benchmarkConcurrentClaims_ExtremeLoad" -Dspring.profiles.active=test
+REM Run with performance profile
+gradlew.bat test --tests "*ConcurrentClaimBenchmarkTest.benchmarkConcurrentClaims_ExtremeLoad" ^
+-Dspring.profiles.active=test,performance ^
+-Dlogging.level.com.zaxxer.hikari=DEBUG ^
+-Dlogging.level.org.springframework.data.redis=DEBUG
 
 echo Performance test completed!
+echo Check logs for HikariCP and Redis connection pool usage
 pause
