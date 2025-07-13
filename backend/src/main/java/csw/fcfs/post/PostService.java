@@ -204,7 +204,16 @@ public class PostService {
     private PostDto toDto(Post post) {
         String claimantsKey = "post:{" + post.getId() + "}:claimants";
         Long claimantsCount = redisService.getSetSize(claimantsKey);
-        int currentClaims = claimantsCount != null ? claimantsCount.intValue() : 0;
+        
+        // If Redis data is missing (expired), rebuild from PostgreSQL
+        int currentClaims;
+        if (claimantsCount == null) {
+            // Fallback: count from database and rebuild cache
+            currentClaims = post.getClaims() != null ? post.getClaims().size() : 0;
+            rebuildClaimCache(post);
+        } else {
+            currentClaims = claimantsCount.intValue();
+        }
 
         return new PostDto(
                 post.getId(),
@@ -221,6 +230,31 @@ public class PostService {
                 post.getVisibility(),
                 post.getShareCode()
         );
+    }
+    
+    /**
+     * Rebuild Redis cache from PostgreSQL data when cache is missing
+     */
+    private void rebuildClaimCache(Post post) {
+        if (post.getClaims() == null || post.getClaims().isEmpty()) {
+            return; // No claims to rebuild
+        }
+        
+        String setKey = "post:{" + post.getId() + "}:claimants";
+        String cntKey = "post:{" + post.getId() + "}:claims_count";
+        
+        // Clear existing data first
+        redisService.deleteKeys(setKey, cntKey);
+        
+        // Rebuild by calling claim.lua for each existing claim
+        for (Claim claim : post.getClaims()) {
+            redisService.executeScript(
+                    redisService.loadScript("claim.lua"),
+                    List.of(setKey, cntKey),
+                    String.valueOf(claim.getUser().getId()),
+                    String.valueOf(post.getQuota())
+            );
+        }
     }
 
     private PostAdminDto toAdminDto(Post post) {

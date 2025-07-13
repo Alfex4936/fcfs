@@ -47,7 +47,7 @@ public class ClaimService {
         }
 
         String result = redisService.executeScript(
-                loadScript("claim.lua"),
+                redisService.loadScript("claim.lua"),
                 Collections.singletonList(String.valueOf(postId)),
                 String.valueOf(user.getId()),
                 String.valueOf(post.getQuota()));
@@ -94,7 +94,7 @@ public class ClaimService {
         String cntKey = "post:{" + post.getId() + "}:claims_count";
         
         String result = redisService.executeScript(
-                loadScript("claim.lua"),
+                redisService.loadScript("claim.lua"),
                 List.of(setKey, cntKey),  // Pass both keys as KEYS[1], KEYS[2]
                 String.valueOf(user.getId()),
                 String.valueOf(post.getQuota()));
@@ -115,7 +115,7 @@ public class ClaimService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         String result = redisService.executeScript(
-                loadScript("declaim.lua"),
+                redisService.loadScript("declaim.lua"),
                 Collections.singletonList(String.valueOf(postId)),
                 String.valueOf(user.getId()));
 
@@ -134,23 +134,12 @@ public class ClaimService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         String result = redisService.executeScript(
-                loadScript("declaim.lua"),
+                redisService.loadScript("declaim.lua"),
                 Collections.singletonList(String.valueOf(postId)),
                 String.valueOf(user.getId()));
 
         if ("SUCCESS".equals(result)) {
             claimAsyncService.deleteClaim(post, user);
-        }
-    }
-
-    private String loadScript(String filename) {
-        try (var is = getClass().getClassLoader().getResourceAsStream("scripts/" + filename)) {
-            if (is == null) {
-                throw new IllegalStateException("Script not found: " + filename);
-            }
-            return new String(is.readAllBytes());
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not load script: " + filename, e);
         }
     }
 }

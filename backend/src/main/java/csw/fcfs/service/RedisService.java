@@ -1,15 +1,16 @@
 package csw.fcfs.service;
 
-import io.lettuce.core.RedisException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.connection.ClusterCommandExecutionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import io.lettuce.core.RedisException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
@@ -17,6 +18,17 @@ import java.util.List;
 public class RedisService {
 
     private final StringRedisTemplate redisTemplate;
+
+    public String loadScript(String filename) {
+        try (var is = getClass().getClassLoader().getResourceAsStream("scripts/" + filename)) {
+            if (is == null) {
+                throw new IllegalStateException("Script not found: " + filename);
+            }
+            return new String(is.readAllBytes());
+        } catch (Exception e) {
+            throw new IllegalStateException("Could not load script: " + filename, e);
+        }
+    }
 
     /**
      * Execute a Lua script with proper error handling for both single Redis and cluster

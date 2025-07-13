@@ -21,4 +21,9 @@ if newCnt > quota then
   return 'QUOTA_EXCEEDED'
 end
 
+-- Set 30-day expiry for memory management (2592000 seconds = 30 days)
+-- This prevents memory leaks while allowing for post reopening scenarios
+redis.call('EXPIRE', setKey, 2592000)
+redis.call('EXPIRE', cntKey, 2592000)
+
 return 'SUCCESS'

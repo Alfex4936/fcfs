@@ -18,7 +18,7 @@ public class FcfsApplication {
 
 	@Bean
 	CommandLineRunner init(csw.fcfs.storage.StorageService storageService) {
-		return (args) -> {
+		return (_args) -> {
 			storageService.deleteAll();
 			storageService.init();
 		};
