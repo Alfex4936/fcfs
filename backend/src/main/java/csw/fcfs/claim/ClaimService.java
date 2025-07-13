@@ -93,9 +93,9 @@ public class ClaimService {
         String setKey = "post:{" + post.getId() + "}:claimants";
         String cntKey = "post:{" + post.getId() + "}:claims_count";
         
-        String result = redisService.executeScript(
-                redisService.loadScript("claim.lua"),
-                List.of(setKey, cntKey),  // Pass both keys as KEYS[1], KEYS[2]
+        String result = redisService.executeScriptBySha1(
+                redisService.getClaimScriptSha1(),
+                List.of(setKey, cntKey),
                 String.valueOf(user.getId()),
                 String.valueOf(post.getQuota()));
 
@@ -114,8 +114,8 @@ public class ClaimService {
         UserAccount user = userAccountRepository.findByEmail(principal.getName())
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        String result = redisService.executeScript(
-                redisService.loadScript("declaim.lua"),
+        String result = redisService.executeScriptBySha1(
+                redisService.getDeclaimScriptSha1(),
                 Collections.singletonList(String.valueOf(postId)),
                 String.valueOf(user.getId()));
 
@@ -133,8 +133,8 @@ public class ClaimService {
         UserAccount user = userAccountRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        String result = redisService.executeScript(
-                redisService.loadScript("declaim.lua"),
+        String result = redisService.executeScriptBySha1(
+                redisService.getDeclaimScriptSha1(),
                 Collections.singletonList(String.valueOf(postId)),
                 String.valueOf(user.getId()));
 
