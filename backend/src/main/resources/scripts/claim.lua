@@ -1,33 +1,24 @@
--- OPTIMIZED VERSION: Minimal operations for maximum performance
--- KEYS[1]: post_id
--- ARGV[1]: user_id
--- ARGV[2]: quota
+-- KEYS[1] = "post:{post_id}:claimants" (set key)
+-- KEYS[2] = "post:{post_id}:claims_count" (counter key)
+-- ARGV[1] = user_id
+-- ARGV[2] = quota
 
-local postId = KEYS[1]
-local userId = ARGV[1] 
-local quota = tonumber(ARGV[2])
+local setKey = KEYS[1]
+local cntKey = KEYS[2]
+local uid    = ARGV[1]
+local quota  = tonumber(ARGV[2])
 
-local claimantsKey = "post:{" .. postId .. "}:claimants"
-local claimsCountKey = "post:{" .. postId .. "}:claims_count"
-
--- Fast check: if user already claimed, return immediately
-if redis.call('SISMEMBER', claimantsKey, userId) == 1 then
+-- Attempt to add first (1 = added, 0 = existed)
+if redis.call('SADD', setKey, uid) == 0 then
   return 'ALREADY_CLAIMED'
 end
 
--- Use EVAL with conditional logic to minimize Redis calls
-local currentClaims = redis.call('GET', claimsCountKey)
-if currentClaims == false then
-  currentClaims = 0
-else 
-  currentClaims = tonumber(currentClaims)
-end
-
-if currentClaims >= quota then
+local newCnt = redis.call('INCR', cntKey)
+if newCnt > quota then
+  -- Roll back
+  redis.call('SREM', setKey, uid)
+  redis.call('DECR', cntKey)
   return 'QUOTA_EXCEEDED'
 end
 
--- Only increment if we're definitely going to succeed
-redis.call('INCR', claimsCountKey)
-redis.call('SADD', claimantsKey, userId)
 return 'SUCCESS'

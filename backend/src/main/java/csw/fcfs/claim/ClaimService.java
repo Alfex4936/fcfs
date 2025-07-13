@@ -2,6 +2,7 @@ package csw.fcfs.claim;
 
 import java.security.Principal;
 import java.util.Collections;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 
@@ -61,8 +62,22 @@ public class ClaimService {
 
     // Optimized version that bypasses cache for better performance
     public String claimPost(Post post, UserAccount user) {
-        // Skip cache service - use pre-loaded entities directly
-        // This eliminates potential database hits from cache misses
+        // Input validation at application level (better than Lua script validation)
+        if (post == null) {
+            throw new IllegalArgumentException("Post cannot be null");
+        }
+        if (user == null) {
+            throw new IllegalArgumentException("User cannot be null");
+        }
+        if (post.getId() == null) {
+            throw new IllegalArgumentException("Post ID cannot be null");
+        }
+        if (user.getId() == null) {
+            throw new IllegalArgumentException("User ID cannot be null");
+        }
+        if (post.getQuota() <= 0) {
+            return "INVALID_QUOTA";
+        }
         
         // 게시물 소유자가 클레임을 시도하는 경우 차단
         if (post.getOwner().getId().equals(user.getId())) {
@@ -74,9 +89,13 @@ public class ClaimService {
             return "POST_NOT_ACCESSIBLE";
         }
 
+        // Build keys in Java to ensure Redis Cluster compatibility
+        String setKey = "post:{" + post.getId() + "}:claimants";
+        String cntKey = "post:{" + post.getId() + "}:claims_count";
+        
         String result = redisService.executeScript(
                 loadScript("claim.lua"),
-                Collections.singletonList(String.valueOf(post.getId())),
+                List.of(setKey, cntKey),  // Pass both keys as KEYS[1], KEYS[2]
                 String.valueOf(user.getId()),
                 String.valueOf(post.getQuota()));
 
