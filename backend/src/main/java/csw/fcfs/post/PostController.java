@@ -24,8 +24,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import csw.fcfs.claim.ClaimService;
+import csw.fcfs.post.dto.CursorPageResponse;
 import csw.fcfs.post.dto.PostDto;
+import csw.fcfs.post.repository.PostRepository;
 import csw.fcfs.storage.StorageService;
+import csw.fcfs.user.UserAccount;
+import csw.fcfs.user.repository.UserAccountRepository;
+import csw.fcfs.util.CursorUtil;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -35,6 +40,8 @@ public class PostController {
 
     private final PostService postService;
     private final ClaimService claimService;
+    private final PostRepository postRepository;
+    private final UserAccountRepository userAccountRepository;
     private final StorageService storageService;
 
     @PostMapping
@@ -83,7 +90,13 @@ public class PostController {
 
     @PostMapping("/{id}/claim")
     public ResponseEntity<String> claimPost(@PathVariable Long id, Principal principal) {
-        return ResponseEntity.ok(claimService.claimPost(id, principal));
+        // Load entities upfront for the optimized claimPost method
+        Post post = postRepository.findByIdWithOwner(id)
+                .orElseThrow(() -> new IllegalArgumentException("Post not found"));
+        UserAccount user = userAccountRepository.findByEmail(principal.getName())
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        
+        return ResponseEntity.ok(claimService.claimPost(post, user));
     }
 
     @GetMapping("/images/{filename:.+}")
@@ -114,5 +127,46 @@ public class PostController {
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
         return ResponseEntity.ok(postService.getAllPublicPosts(pageable));
+    }
+
+    // 커서 기반 페이지네이션 - 공개 게시물
+    @GetMapping("/cursor")
+    public ResponseEntity<CursorPageResponse<PostDto>> getPostsCursor(
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "10") int size,
+            Principal principal) {
+
+        // 커서 유효성 검증
+        if (!CursorUtil.isValidCursor(cursor)) {
+            throw new IllegalArgumentException("Invalid cursor format");
+        }
+
+        if (size > 50) {
+            size = 50; // 최대 크기 제한
+        }
+
+        if (principal != null) {
+            return ResponseEntity.ok(postService.getVisiblePostsCursor(cursor, size, principal));
+        } else {
+            return ResponseEntity.ok(postService.getPublicPostsCursor(cursor, size));
+        }
+    }
+
+    // 공개 게시물만 커서 기반 페이지네이션
+    @GetMapping("/public/cursor")
+    public ResponseEntity<CursorPageResponse<PostDto>> getPublicPostsCursor(
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "10") int size) {
+
+        // 커서 유효성 검증
+        if (!CursorUtil.isValidCursor(cursor)) {
+            throw new IllegalArgumentException("Invalid cursor format");
+        }
+
+        if (size > 50) {
+            size = 50; // 최대 크기 제한
+        }
+
+        return ResponseEntity.ok(postService.getPublicPostsCursor(cursor, size));
     }
 }

@@ -16,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import csw.fcfs.claim.Claim;
 import csw.fcfs.claim.dto.ClaimDto;
+import csw.fcfs.post.dto.CursorPageResponse;
 import csw.fcfs.post.dto.PostAdminDto;
 import csw.fcfs.post.dto.PostDto;
 import csw.fcfs.post.repository.PostRepository;
@@ -24,6 +25,7 @@ import csw.fcfs.storage.StorageService;
 import csw.fcfs.user.UserAccount;
 import csw.fcfs.user.dto.UserDto;
 import csw.fcfs.user.repository.UserAccountRepository;
+import csw.fcfs.util.CursorUtil;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -342,5 +344,64 @@ public class PostService {
         }
 
         postRepository.delete(post);
+    }
+
+    // 커서 기반 페이지네이션 - 공개 게시물
+    @Transactional(readOnly = true)
+    public CursorPageResponse<PostDto> getPublicPostsCursor(String cursor, int size) {
+        return getPostsCursor(cursor, size, null);
+    }
+
+    // 커서 기반 페이지네이션 - 사용자 가시성 고려
+    @Transactional(readOnly = true)
+    public CursorPageResponse<PostDto> getVisiblePostsCursor(String cursor, int size, Principal principal) {
+        UserAccount user = null;
+        if (principal != null) {
+            user = userAccountRepository.findByEmail(principal.getName()).orElse(null);
+        }
+        return getPostsCursor(cursor, size, user);
+    }
+
+    private CursorPageResponse<PostDto> getPostsCursor(String cursor, int size, UserAccount user) {
+        List<Post> posts;
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, size + 1); // +1로 다음 페이지 존재 확인
+
+        if (cursor == null) {
+            // 첫 페이지
+            if (user == null) {
+                posts = postRepository.findFirstPublicPosts(pageable);
+            } else {
+                posts = postRepository.findFirstVisiblePosts(user, pageable);
+            }
+        } else {
+            // 단순 타임스탬프 커서 사용 (향후 복합 커서로 업그레이드 가능)
+            Instant cursorTime = CursorUtil.decodeCursor(cursor);
+            if (user == null) {
+                posts = postRepository.findPublicPostsAfterCursor(cursorTime, pageable);
+            } else {
+                posts = postRepository.findVisiblePostsAfterCursor(user, cursorTime, pageable);
+            }
+        }
+
+        boolean hasNext = posts.size() > size;
+        if (hasNext) {
+            posts = posts.subList(0, size); // 실제 반환할 크기로 조정
+        }
+
+        // 다음 커서 생성 (단순 타임스탬프, 향후 복합 커서로 업그레이드 가능)
+        String nextCursor = null;
+        if (hasNext && !posts.isEmpty()) {
+            Post lastPost = posts.get(posts.size() - 1);
+            nextCursor = CursorUtil.encodeCursor(lastPost.getCreatedAt());
+        }
+
+        // 이전 커서 생성 (현재는 null, 양방향 네비게이션 구현시 추가)
+        String prevCursor = null;
+
+        List<PostDto> postDtos = posts.stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+
+        return CursorPageResponse.of(postDtos, nextCursor, prevCursor, size);
     }
 }
